@@ -39,9 +39,16 @@ export const newEmbeddingResponse = (
 });
 
 export const newResponseHeaders = (cacheHitNum: number) => {
-  return {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    [proxyCacheHitNumHeaderKey]: cacheHitNum.toString(),
-  };
+  const headers = new Headers();
+  headers.set("Content-Type", "application/json");
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set(proxyCacheHitNumHeaderKey, cacheHitNum.toString());
+  return headers;
+};
+
+export const setHeaders = (res: Response, headers: Headers) => {
+  for (const [key, value] of headers) {
+    res.headers.set(key, value);
+  }
+  return res;
 };

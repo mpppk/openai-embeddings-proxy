@@ -4,13 +4,18 @@ import {
   newEmbeddingResponse,
   newResponseHeaders,
   OpenAIEmbeddingResponse,
+  OpenAIEmbeddingResponseData,
+  setHeaders,
 } from "./reqres";
 import { EmbeddingsStore } from "./EmbeddingsStore";
 import { EMBEDDING_ENDPOINT, fetchEmbedding } from "./openai";
+import { toPrettyJson } from "./lib";
 
 const app = new Hono();
 
-const toResponseDataList = async (embeddings: number[][]) => {
+const toResponseDataList = (
+  embeddings: number[][]
+): OpenAIEmbeddingResponseData[] => {
   return embeddings.map((embedding, index) => ({
     object: "embedding",
     embedding: embedding,
@@ -29,11 +34,10 @@ app.post(EMBEDDING_ENDPOINT, async (c) => {
   );
 
   if (store.isFullyCached) {
-    return c.text(
-      JSON.stringify(newEmbeddingResponse(store.embeddings), null, 2),
-      200,
-      newResponseHeaders(cacheHitInputs.length)
-    );
+    const body = toPrettyJson(newEmbeddingResponse(store.embeddings));
+    const res = new Response(body);
+    setHeaders(res, newResponseHeaders(cacheHitInputs.length));
+    return res;
   }
 
   const res = await fetchEmbedding(requestBody, c.req.headers, noCacheInputs);
@@ -41,24 +45,16 @@ app.post(EMBEDDING_ENDPOINT, async (c) => {
     return res;
   }
 
-  const body: OpenAIEmbeddingResponse = await res.json();
+  let body: OpenAIEmbeddingResponse = await res.json();
   await store.addEmbeddings(
     noCacheInputs,
     body.data.map((d) => d.embedding)
   );
+  body.data = toResponseDataList(store.embeddings);
 
-  return c.text(
-    JSON.stringify(
-      { ...body, data: await toResponseDataList(store.embeddings) },
-      null,
-      2
-    ),
-    200,
-    {
-      ...newResponseHeaders(cacheHitInputs.length),
-      ...res.headers,
-    }
-  );
+  const newRes = new Response(toPrettyJson(body), res);
+  setHeaders(newRes, newResponseHeaders(cacheHitInputs.length));
+  return newRes;
 });
 
 export default app;
